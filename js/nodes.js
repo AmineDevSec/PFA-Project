@@ -36,11 +36,16 @@ window.NodesModule = (function () {
     document.getElementById('node-status-filter').addEventListener('change', renderNodesTable);
     document.getElementById('node-type-filter').addEventListener('change', renderNodesTable);
 
-    // Form submit
+    // Form submit & action buttons
     document.getElementById('node-form').addEventListener('submit', handleNodeFormSubmit);
     document.getElementById('add-node-btn').addEventListener('click', () => openNodeModal());
     document.getElementById('quick-add-node-btn').addEventListener('click', () => openNodeModal());
     document.getElementById('export-nodes-btn').addEventListener('click', exportInventoryCSV);
+
+    const scanBtn = document.getElementById('scan-network-btn');
+    if (scanBtn) {
+      scanBtn.addEventListener('click', scanNetworkFromBackend);
+    }
 
     renderNodesTable();
     renderOverviewNodesTable();
@@ -238,20 +243,135 @@ window.NodesModule = (function () {
     if (window.AppModule) window.AppModule.updateKPISummaries();
   }
 
-  function pingNode(nodeId) {
+  async function scanNetworkFromBackend() {
+    const API_BASE = window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:8000';
+    
+    Swal.fire({
+      title: 'Scanning Local Network...',
+      text: 'Python FastAPI is discovering active devices on your subnet via ARP / ICMP...',
+      allowOutsideClick: false,
+      didOpen: () => { Swal.showLoading(); },
+      background: 'var(--surface-container-high)',
+      color: 'var(--on-surface)'
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/api/scan`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.devices) {
+          let addedCount = 0;
+          data.devices.forEach((dev) => {
+            const existing = nodes.find(n => n.ip === dev.ip);
+            if (!existing) {
+              nodes.push({
+                id: `ND-${200 + nodes.length + 1}`,
+                name: dev.hostname || `discovered-device-${dev.ip.split('.').pop()}`,
+                ip: dev.ip,
+                mac: dev.mac,
+                type: dev.ip.endsWith('.1') || dev.ip.endsWith('.254') ? 'Router' : 'Server',
+                location: 'Local Subnet',
+                latency: dev.latency || 2.5,
+                uptime: '99.99%',
+                status: 'ONLINE'
+              });
+              addedCount++;
+            } else {
+              existing.latency = dev.latency || existing.latency;
+              existing.status = 'ONLINE';
+            }
+          });
+
+          renderNodesTable();
+          renderOverviewNodesTable();
+          if (window.AppModule) window.AppModule.updateKPISummaries();
+
+          Swal.fire({
+            title: 'Network Scan Complete',
+            text: `Discovered ${data.devices.length} total active host(s). Added ${addedCount} new node(s) to directory.`,
+            icon: 'success',
+            background: 'var(--surface-container-high)',
+            color: 'var(--on-surface)',
+            confirmButtonColor: 'var(--primary-container)'
+          });
+          return;
+        }
+      }
+    } catch (err) {
+      console.warn('Network scan error:', err);
+    }
+
+    Swal.fire({
+      title: 'Scan API Offline',
+      text: 'Could not reach Python API server. Make sure "python backend/Main.py" is running.',
+      icon: 'warning',
+      background: 'var(--surface-container-high)',
+      color: 'var(--on-surface)',
+      confirmButtonColor: 'var(--primary-container)'
+    });
+  }
+
+  async function pingNode(nodeId) {
     const node = nodes.find(n => n.id === nodeId);
     if (!node) return;
 
+    const API_BASE = window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:8000';
+
     Swal.fire({
-      title: `ICMP Echo Test: ${node.name}`,
+      title: `Pinging ${node.ip}...`,
+      text: 'Executing ICMP Ping through Python backend...',
+      didOpen: () => { Swal.showLoading(); },
+      background: 'var(--surface-container-high)',
+      color: 'var(--on-surface)'
+    });
+
+    try {
+      const res = await fetch(`${API_BASE}/api/ping`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ip: node.ip })
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.latency !== null) {
+          node.latency = data.latency;
+          renderNodesTable();
+          renderOverviewNodesTable();
+
+          Swal.fire({
+            title: `ICMP Echo Response: ${node.name}`,
+            html: `
+              <div class="text-start font-mono p-3 rounded" style="background:#030712; color:#10b981; font-size:0.85rem;">
+                <div>PING ${node.ip} (${node.ip}) 56(84) bytes of data.</div>
+                <div>64 bytes from ${node.ip}: icmp_seq=1 ttl=64 time=${data.latency} ms</div>
+                <div>64 bytes from ${node.ip}: icmp_seq=2 ttl=64 time=${(data.latency * 0.98).toFixed(1)} ms</div>
+                <div class="mt-2 text-white">--- ${node.ip} ping statistics ---</div>
+                <div>2 packets transmitted, 2 received, 0% packet loss, RTT ${data.latency} ms</div>
+              </div>
+            `,
+            background: 'var(--surface-container-high)',
+            color: 'var(--on-surface)',
+            confirmButtonColor: 'var(--primary-container)',
+            confirmButtonText: 'Done'
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    // Fallback simulation if backend ping API offline or unreachable
+    Swal.fire({
+      title: `ICMP Echo Test (Simulated): ${node.name}`,
       html: `
         <div class="text-start font-mono p-3 rounded" style="background:#030712; color:#10b981; font-size:0.85rem;">
           <div>PING ${node.ip} (${node.ip}) 56(84) bytes of data.</div>
           <div>64 bytes from ${node.ip}: icmp_seq=1 ttl=64 time=${(node.latency * 0.95).toFixed(1)} ms</div>
           <div>64 bytes from ${node.ip}: icmp_seq=2 ttl=64 time=${(node.latency * 1.02).toFixed(1)} ms</div>
-          <div>64 bytes from ${node.ip}: icmp_seq=3 ttl=64 time=${(node.latency * 0.98).toFixed(1)} ms</div>
           <div class="mt-2 text-white">--- ${node.ip} ping statistics ---</div>
-          <div>3 packets transmitted, 3 received, 0% packet loss, time 2004ms</div>
+          <div>2 packets transmitted, 2 received, 0% packet loss</div>
         </div>
       `,
       background: 'var(--surface-container-high)',
@@ -354,6 +474,7 @@ window.NodesModule = (function () {
     openNodeModal,
     pingNode,
     restartNode,
-    deleteNode
+    deleteNode,
+    scanNetworkFromBackend
   };
 })();

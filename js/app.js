@@ -8,33 +8,43 @@ window.AppModule = (function () {
   let liveTimer = null;
   let currentTheme = 'dark';
 
+  const API_BASE_URL = window.location.origin.startsWith('http') 
+    ? window.location.origin 
+    : 'http://localhost:8000';
+
+  let isApiOnline = false;
+
   function init() {
-    // 1. Initialize modules
+    // 1. Check Python Backend API Status
+    checkBackendHealth();
+    setInterval(checkBackendHealth, 10000);
+
+    // 2. Initialize modules
     if (window.NodesModule) window.NodesModule.init();
     if (window.AlertsModule) window.AlertsModule.init();
     if (window.ChartsModule) window.ChartsModule.init();
     if (window.DiagnosticsModule) window.DiagnosticsModule.init();
 
-    // 2. Navigation listener
+    // 3. Navigation listener
     setupNavigation();
 
-    // 3. Theme toggle setup
+    // 4. Theme toggle setup
     setupThemeToggle();
 
-    // 4. Live telemetry loop
+    // 5. Live telemetry loop
     setupLiveStreamToggle();
 
-    // 5. System Clock
+    // 6. System Clock
     setInterval(updateSystemClock, 1000);
     updateSystemClock();
 
-    // 6. Global Search
+    // 7. Global Search
     setupGlobalSearch();
 
-    // 7. Settings sliders listeners
+    // 8. Settings sliders listeners
     setupSettingsListeners();
 
-    // 8. Force Refresh button
+    // 9. Force Refresh button
     const refreshBtn = document.getElementById('refresh-telemetry-btn');
     if (refreshBtn) {
       refreshBtn.addEventListener('click', forceRefreshTelemetry);
@@ -52,6 +62,44 @@ window.AppModule = (function () {
     startLiveSimulation();
 
     updateKPISummaries();
+  }
+
+  async function checkBackendHealth() {
+    const badgeText = document.getElementById('backend-status-text');
+    const badgeEl = document.getElementById('backend-status-badge');
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/health`, { cache: 'no-cache' });
+      if (res.ok) {
+        isApiOnline = true;
+        if (badgeText) badgeText.innerText = 'API: Python Online';
+        if (badgeEl) {
+          badgeEl.className = 'badge bg-success text-white border border-success px-2 py-1 font-mono d-none d-sm-flex align-items-center gap-1';
+        }
+        fetchNetworkInfo();
+        return;
+      }
+    } catch (e) {
+      // Backend not running / offline fallback
+    }
+    isApiOnline = false;
+    if (badgeText) badgeText.innerText = 'API: Simulation Mode';
+    if (badgeEl) {
+      badgeEl.className = 'badge bg-dark border border-secondary text-secondary px-2 py-1 font-mono d-none d-sm-flex align-items-center gap-1';
+    }
+  }
+
+  async function fetchNetworkInfo() {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/network`);
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.data) {
+          console.log('[Obsidian Flux] Python Network Config:', result.data);
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
   }
 
   function setupNavigation() {
@@ -165,8 +213,29 @@ window.AppModule = (function () {
 
   function startLiveSimulation() {
     if (liveTimer) clearInterval(liveTimer);
-    liveTimer = setInterval(() => {
+    liveTimer = setInterval(async () => {
       if (!isLiveStreaming) return;
+
+      if (isApiOnline) {
+        try {
+          const sysRes = await fetch(`${API_BASE_URL}/api/system`);
+          if (sysRes.ok) {
+            const sysData = await sysRes.json();
+            if (sysData.success) {
+              const cpu = sysData.cpu_percent.toFixed(1);
+              const ram = sysData.ram_percent.toFixed(1);
+
+              document.getElementById('res-cpu-val').innerText = `${cpu}%`;
+              document.getElementById('res-cpu-bar').style.width = `${cpu}%`;
+
+              document.getElementById('res-ram-val').innerText = `${ram}%`;
+              document.getElementById('res-ram-bar').style.width = `${ram}%`;
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
 
       // Random micro-fluctuations in throughput (12.0 ~ 16.0 Gbps)
       const ingress = +(10 + Math.random() * 4).toFixed(1);
@@ -176,17 +245,19 @@ window.AppModule = (function () {
       document.getElementById('kpi-bandwidth').innerText = `${(ingress + egress).toFixed(1)} Gbps`;
       document.getElementById('kpi-latency').innerText = `${latency} ms`;
 
-      // Resource progress bar variations
-      const cpu = +(70 + Math.random() * 15).toFixed(1);
-      const ram = +(60 + Math.random() * 5).toFixed(1);
+      if (!isApiOnline) {
+        // Resource progress bar variations in simulation mode
+        const cpu = +(70 + Math.random() * 15).toFixed(1);
+        const ram = +(60 + Math.random() * 5).toFixed(1);
+
+        document.getElementById('res-cpu-val').innerText = `${cpu}%`;
+        document.getElementById('res-cpu-bar').style.width = `${cpu}%`;
+
+        document.getElementById('res-ram-val').innerText = `${ram}%`;
+        document.getElementById('res-ram-bar').style.width = `${ram}%`;
+      }
+
       const loss = +(1.0 + Math.random() * 1.5).toFixed(1);
-
-      document.getElementById('res-cpu-val').innerText = `${cpu}%`;
-      document.getElementById('res-cpu-bar').style.width = `${cpu}%`;
-
-      document.getElementById('res-ram-val').innerText = `${ram}%`;
-      document.getElementById('res-ram-bar').style.width = `${ram}%`;
-
       document.getElementById('res-loss-val').innerText = `${loss}%`;
       document.getElementById('res-loss-bar').style.width = `${loss * 10}%`;
 

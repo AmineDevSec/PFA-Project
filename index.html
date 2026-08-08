@@ -28,7 +28,7 @@
     <aside class="sidebar" id="main-sidebar">
       <div class="sidebar-brand">
         <div class="brand-icon">
-          <img src="./assets/image/fmps_logo.jpg" alt="">
+          <img src="fmps_logo.jpg" alt="FMPS Logo">
         </div>
         <div>
           <div class="brand-title">FMPS</div>
@@ -102,6 +102,12 @@
         </div>
 
         <div class="header-actions">
+          <!-- Python Backend API Badge -->
+          <div class="badge bg-dark border border-secondary text-info px-2 py-1 font-mono d-none d-sm-flex align-items-center gap-1" id="backend-status-badge" title="Python FastAPI Backend Status">
+            <i class="bi bi-cpu-fill text-warning"></i>
+            <span id="backend-status-text">API: Checking...</span>
+          </div>
+
           <!-- Live Simulation Toggle -->
           <div class="live-pulse-badge" id="live-stream-toggle" title="Click to toggle live telemetry data stream">
             <span class="pulse-dot" id="live-pulse-dot"></span>
@@ -338,6 +344,9 @@
                 servers, and security appliances.</p>
             </div>
             <div class="d-flex gap-2">
+              <button class="btn btn-obsidian-secondary text-info border-info" id="scan-network-btn" title="Scan local network via Python backend">
+                <i class="bi bi-radar"></i> Scan Network
+              </button>
               <button class="btn btn-obsidian-secondary" id="export-nodes-btn">
                 <i class="bi bi-download"></i> Export Inventory
               </button>
