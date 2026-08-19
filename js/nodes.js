@@ -49,10 +49,55 @@ window.NodesModule = (function () {
 
     renderNodesTable();
     renderOverviewNodesTable();
+
+    // Populate the node directory with REAL devices discovered by the Python
+    // backend (Scanner.py). Falls back to the simulated seed inventory only
+    // when the API is unreachable.
+    loadRealDevicesFromBackend().then((loaded) => {
+      if (loaded) {
+        renderNodesTable();
+        renderOverviewNodesTable();
+        if (window.AppModule) window.AppModule.updateKPISummaries();
+      }
+    });
   }
 
   function getNodes() {
     return nodes;
+  }
+
+  function mapDeviceToNode(dev, idx) {
+    return {
+      id: `ND-${100 + idx}`,
+      name: (dev.hostname && dev.hostname !== dev.ip)
+        ? dev.hostname
+        : `device-${dev.ip.split('.').pop()}`,
+      ip: dev.ip,
+      mac: dev.mac,
+      type: (dev.ip.endsWith('.1') || dev.ip.endsWith('.254')) ? 'Router' : 'Server',
+      location: 'Local Subnet',
+      latency: dev.latency || 2.5,
+      uptime: '99.99%',
+      status: dev.status || 'ONLINE'
+    };
+  }
+
+  async function loadRealDevicesFromBackend() {
+    const API_BASE = window.location.origin.startsWith('http') ? window.location.origin : 'http://localhost:8000';
+    try {
+      const res = await fetch(`${API_BASE}/api/scan`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.devices && data.devices.length) {
+          nodes = data.devices.map(mapDeviceToNode);
+          console.log(`[Obsidian Flux] Loaded ${nodes.length} real device(s) from Scanner.py backend.`);
+          return true;
+        }
+      }
+    } catch (err) {
+      console.warn('[Obsidian Flux] Backend offline - keeping simulated inventory.', err);
+    }
+    return false;
   }
 
   function getStatusChipHTML(status) {
@@ -259,28 +304,8 @@ window.NodesModule = (function () {
       const res = await fetch(`${API_BASE}/api/scan`);
       if (res.ok) {
         const data = await res.json();
-        if (data.success && data.devices) {
-          let addedCount = 0;
-          data.devices.forEach((dev) => {
-            const existing = nodes.find(n => n.ip === dev.ip);
-            if (!existing) {
-              nodes.push({
-                id: `ND-${200 + nodes.length + 1}`,
-                name: dev.hostname || `discovered-device-${dev.ip.split('.').pop()}`,
-                ip: dev.ip,
-                mac: dev.mac,
-                type: dev.ip.endsWith('.1') || dev.ip.endsWith('.254') ? 'Router' : 'Server',
-                location: 'Local Subnet',
-                latency: dev.latency || 2.5,
-                uptime: '99.99%',
-                status: 'ONLINE'
-              });
-              addedCount++;
-            } else {
-              existing.latency = dev.latency || existing.latency;
-              existing.status = 'ONLINE';
-            }
-          });
+        if (data.success && data.devices && data.devices.length) {
+          nodes = data.devices.map(mapDeviceToNode);
 
           renderNodesTable();
           renderOverviewNodesTable();
@@ -288,7 +313,7 @@ window.NodesModule = (function () {
 
           Swal.fire({
             title: 'Network Scan Complete',
-            text: `Discovered ${data.devices.length} total active host(s). Added ${addedCount} new node(s) to directory.`,
+            text: `Discovered ${data.devices.length} real device(s) on ${data.network && data.network.network ? data.network.network : 'your network'}. Node directory now reflects live inventory.`,
             icon: 'success',
             background: 'var(--surface-container-high)',
             color: 'var(--on-surface)',
@@ -475,6 +500,7 @@ window.NodesModule = (function () {
     pingNode,
     restartNode,
     deleteNode,
-    scanNetworkFromBackend
+    scanNetworkFromBackend,
+    loadRealDevicesFromBackend
   };
 })();
