@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Obsidian Flux | Network Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="app-shell">
+
+
+
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <span class="brand-mark">NA</span>
+      <span class="brand-name">Network Admin</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="#overview" class="nav-item active" data-section="overview">Overview</a>
+      <a href="#network" class="nav-item" data-section="network">Network</a>
+      <a href="#hotspot" class="nav-item" data-section="hotspot">Hotspot</a>
+      <a href="#devices" class="nav-item" data-section="devices">Devices</a>
+      <a href="#traffic" class="nav-item" data-section="traffic">Traffic</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="api-status" id="api-status">
+        <span class="status-dot offline" id="api-status-dot"></span>
+        <span id="api-status-text">Connecting…</span>
+      </div>
+    </div>
+  </aside>
+
+
+
+  <main class="main">
+
+    <header class="topbar">
+      <div>
+        <h1 class="page-title">Dashboard</h1>
+        <p class="page-subtitle">Local network monitoring cockpit</p>
+      </div>
+      <div class="topbar-actions">
+        <span class="label-mono" id="last-updated">LAST UPDATE: --:--:--</span>
+        <button class="btn btn-secondary" id="refresh-btn">Refresh</button>
+      </div>
+    </header>
+
+
+
+    <section class="grid grid-4" id="overview">
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">CPU Usage</span>
+        </div>
+        <div class="metric-value" id="cpu-value">--%</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="cpu-bar" style="width:0%"></div>
+        </div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">RAM Usage</span>
+        </div>
+        <div class="metric-value" id="ram-value">--%</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="ram-bar" style="width:0%"></div>
+        </div>
+        <div class="metric-sub label-mono" id="ram-detail">-- / -- GB</div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">Download</span>
+        </div>
+        <div class="metric-value accent-secondary" id="download-value">0.00<span class="metric-unit">Mbps</span></div>
+        <div class="metric-sub label-mono" id="download-bytes">0 B</div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">Upload</span>
+        </div>
+        <div class="metric-value accent-primary" id="upload-value">0.00<span class="metric-unit">Mbps</span></div>
+        <div class="metric-sub label-mono" id="upload-bytes">0 B</div>
+      </div>
+
+    </section>
+
+
+
+    <section class="grid grid-2" id="network">
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Network Information</span>
+        </div>
+        <table class="info-table">
+          <tbody>
+            <tr><td class="label-mono">INTERFACE</td><td id="net-interface">--</td></tr>
+            <tr><td class="label-mono">LOCAL IP</td><td class="mono" id="net-local-ip">--</td></tr>
+            <tr><td class="label-mono">NETMASK</td><td class="mono" id="net-netmask">--</td></tr>
+            <tr><td class="label-mono">NETWORK</td><td class="mono" id="net-network">--</td></tr>
+            <tr><td class="label-mono">GATEWAY</td><td class="mono" id="net-gateway">--</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="card" id="hotspot">
+        <div class="card-header">
+          <span class="card-title">Mobile Hotspot</span>
+          <span class="chip" id="hotspot-status-chip"><span class="chip-dot"></span><span id="hotspot-status-text">Unknown</span></span>
+        </div>
+        <table class="info-table">
+          <tbody>
+            <tr><td class="label-mono">INTERFACE</td><td id="hotspot-interface">--</td></tr>
+            <tr><td class="label-mono">HOTSPOT IP</td><td class="mono" id="hotspot-ip">--</td></tr>
+            <tr><td class="label-mono">HOTSPOT NETWORK</td><td class="mono" id="hotspot-network">--</td></tr>
+            <tr><td class="label-mono">DEVICE COUNT</td><td id="hotspot-device-count">--</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+    </section>
+
+
+
+    <section class="grid grid-1" id="devices">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Connected Devices</span>
+          <span class="label-mono" id="devices-count">0 DEVICES</span>
+        </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th class="label-mono">STATUS</th>
+                <th class="label-mono">HOSTNAME</th>
+                <th class="label-mono">IP ADDRESS</th>
+                <th class="label-mono">MAC ADDRESS</th>
+                <th class="label-mono">TYPE</th>
+                <th class="label-mono">LATENCY</th>
+              </tr>
+            </thead>
+            <tbody id="devices-body">
+              <tr><td colspan="6" class="empty-row">No data yet</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="table-note" id="devices-note"></p>
+      </div>
+    </section>
+
+
+
+    <section class="grid grid-3" id="traffic">
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">Hotspot Download</span>
+        </div>
+        <div class="metric-value accent-secondary" id="traffic-download">0.00<span class="metric-unit">Mbps</span></div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">Hotspot Upload</span>
+        </div>
+        <div class="metric-value accent-primary" id="traffic-upload">0.00<span class="metric-unit">Mbps</span></div>
+      </div>
+
+      <div class="card metric-card">
+        <div class="card-header">
+          <span class="card-title">Hotspot Interface</span>
+        </div>
+        <div class="metric-value metric-value-sm mono" id="traffic-interface">--</div>
+        <div class="metric-sub label-mono" id="traffic-error"></div>
+      </div>
+
+    </section>
+
+  </main>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>

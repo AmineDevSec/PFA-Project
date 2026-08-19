@@ -1,0 +1,509 @@
+/* ============================================================
+   OBSIDIAN FLUX - DESIGN TOKENS (from Design.md)
+   ============================================================ */
+
+:root {
+  /* Colors */
+  --surface: #0b1326;
+  --surface-dim: #0b1326;
+  --surface-bright: #31394d;
+  --surface-container-lowest: #060e20;
+  --surface-container-low: #131b2e;
+  --surface-container: #171f33;
+  --surface-container-high: #222a3d;
+  --surface-container-highest: #2d3449;
+  --on-surface: #dae2fd;
+  --on-surface-variant: #c3c6d7;
+  --outline: #8d90a0;
+  --outline-variant: #434655;
+  --primary: #b4c5ff;
+  --on-primary: #002a78;
+  --primary-container: #2563eb;
+  --on-primary-container: #eeefff;
+  --secondary: #4edea3;
+  --on-secondary: #003824;
+  --secondary-container: #00a572;
+  --tertiary: #ffb596;
+  --on-tertiary-container: #ffede6;
+  --error: #ffb4ab;
+  --on-error: #690005;
+  --error-container: #93000a;
+  --on-error-container: #ffdad6;
+  --background: #0b1326;
+  --on-background: #dae2fd;
+  --surface-variant: #2d3449;
+
+  /* Typography */
+  --font-body: "Hanken Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Radius */
+  --radius-sm: 0.125rem;
+  --radius-default: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-full: 9999px;
+
+  /* Spacing */
+  --unit: 4px;
+  --gutter: 16px;
+  --margin-page: 24px;
+  --card-padding: 20px;
+  --stack-gap: 12px;
+
+  /* Sidebar */
+  --sidebar-width: 240px;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--background);
+  color: var(--on-background);
+  font-size: 16px;
+  line-height: 24px;
+}
+
+.mono {
+  font-family: var(--font-mono);
+}
+
+.label-mono {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 16px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--on-surface-variant);
+}
+
+/* ============================================================
+   LAYOUT
+   ============================================================ */
+
+.app-shell {
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ---------------- SIDEBAR ---------------- */
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  background: var(--surface-container-low);
+  border-right: 1px solid var(--outline-variant);
+  display: flex;
+  flex-direction: column;
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 100vh;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px var(--card-padding);
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.brand-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.brand-name {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--on-surface);
+}
+
+.sidebar-nav {
+  display: flex;
+  flex-direction: column;
+  padding: var(--stack-gap) 12px;
+  gap: 4px;
+  flex: 1;
+}
+
+.nav-item {
+  display: block;
+  padding: 10px 12px;
+  border-radius: var(--radius-default);
+  color: var(--on-surface-variant);
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.nav-item:hover {
+  background: var(--surface-container-high);
+  color: var(--on-surface);
+}
+
+.nav-item.active {
+  background: var(--surface-container-high);
+  color: var(--primary);
+  border: 1px solid var(--outline-variant);
+}
+
+.sidebar-footer {
+  padding: var(--card-padding);
+  border-top: 1px solid var(--outline-variant);
+}
+
+.api-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--on-surface-variant);
+}
+
+/* ---------------- MAIN ---------------- */
+
+.main {
+  margin-left: var(--sidebar-width);
+  flex: 1;
+  padding: var(--margin-page);
+  max-width: 1440px;
+}
+
+.topbar {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.page-title {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 40px;
+  color: var(--on-surface);
+}
+
+.page-subtitle {
+  font-size: 14px;
+  color: var(--on-surface-variant);
+  margin-top: 4px;
+}
+
+.topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+/* ============================================================
+   GRID
+   ============================================================ */
+
+.grid {
+  display: grid;
+  gap: var(--gutter);
+  margin-bottom: var(--gutter);
+}
+
+.grid-4 {
+  grid-template-columns: repeat(4, 1fr);
+}
+
+.grid-3 {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.grid-2 {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.grid-1 {
+  grid-template-columns: 1fr;
+}
+
+@media (max-width: 1279px) {
+  .grid-4, .grid-3, .grid-2 {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 767px) {
+  .grid-4, .grid-3, .grid-2 {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    width: 64px;
+  }
+  .brand-name {
+    display: none;
+  }
+  .nav-item {
+    text-align: center;
+    font-size: 0;
+  }
+  .main {
+    margin-left: 64px;
+    padding: 16px;
+  }
+}
+
+/* ============================================================
+   CARD
+   ============================================================ */
+
+.card {
+  background: var(--surface-container);
+  border: 1px solid var(--outline-variant);
+  border-radius: var(--radius-default);
+  padding: var(--card-padding);
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--stack-gap);
+}
+
+.card-title {
+  font-weight: 600;
+  font-size: 16px;
+  color: var(--on-surface);
+}
+
+/* ---------------- METRIC CARD ---------------- */
+
+.metric-value {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 40px;
+  color: var(--on-surface);
+}
+
+.metric-value-sm {
+  font-size: 20px;
+  line-height: 28px;
+}
+
+.metric-unit {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  margin-left: 6px;
+}
+
+.metric-sub {
+  margin-top: 8px;
+}
+
+.accent-secondary {
+  color: var(--secondary);
+}
+
+.accent-primary {
+  color: var(--primary);
+}
+
+/* ---------------- PROGRESS BAR ---------------- */
+
+.progress-bar {
+  margin-top: 12px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--surface-container-high);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  background: linear-gradient(90deg, var(--primary-container), var(--primary));
+  transition: width 0.4s ease;
+}
+
+.progress-fill.warn {
+  background: linear-gradient(90deg, #bc4800, var(--tertiary));
+}
+
+.progress-fill.danger {
+  background: linear-gradient(90deg, var(--error-container), var(--error));
+}
+
+/* ============================================================
+   INFO TABLE (key/value)
+   ============================================================ */
+
+.info-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.info-table td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--outline-variant);
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.info-table td:first-child {
+  width: 45%;
+  color: var(--on-surface-variant);
+}
+
+.info-table tr:last-child td {
+  border-bottom: none;
+}
+
+/* ============================================================
+   DATA TABLE
+   ============================================================ */
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table th {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--outline-variant);
+}
+
+.data-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--outline-variant);
+  font-size: 14px;
+  color: var(--on-surface);
+}
+
+.data-table tbody tr:hover {
+  background: var(--surface-container-high);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.empty-row {
+  text-align: center;
+  color: var(--on-surface-variant);
+  padding: 24px !important;
+}
+
+.table-note {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--tertiary);
+}
+
+/* ============================================================
+   CHIPS & STATUS
+   ============================================================ */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--surface-container-high);
+  color: var(--on-surface-variant);
+}
+
+.chip-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--outline);
+}
+
+.chip.online {
+  background: rgba(78, 222, 163, 0.14);
+  color: var(--secondary);
+}
+
+.chip.online .chip-dot {
+  background: var(--secondary);
+  box-shadow: 0 0 6px var(--secondary);
+}
+
+.chip.offline {
+  background: rgba(255, 180, 171, 0.14);
+  color: var(--error);
+}
+
+.chip.offline .chip-dot {
+  background: var(--error);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--outline);
+  flex-shrink: 0;
+}
+
+.status-dot.online {
+  background: var(--secondary);
+  box-shadow: 0 0 6px var(--secondary);
+}
+
+.status-dot.offline {
+  background: var(--error);
+}
+
+/* ============================================================
+   BUTTONS
+   ============================================================ */
+
+.btn {
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  padding: 10px 18px;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: filter 0.15s ease, background 0.15s ease;
+}
+
+.btn-secondary {
+  background: transparent;
+  border: 1px solid var(--outline-variant);
+  color: var(--on-surface);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-container-high);
+}
+
+.btn:active {
+  filter: brightness(0.9);
+}
