@@ -1,61 +1,115 @@
 # monitoring.py
 
 import time
+import threading
+
 import psutil
-import socket
 
 from network_info import get_network_info
 
 
 # ============================================================
-# CPU
+# BACKGROUND METRICS CACHE
 # ============================================================
 
-def get_cpu_usage():
-    """
-    Get current CPU usage.
-
-    Returns:
-        float: CPU usage percentage.
-    """
-
-    return psutil.cpu_percent(interval=0.5)
-
-
-# ============================================================
-# RAM
-# ============================================================
-
-def get_ram_usage():
-    """
-    Get current RAM usage.
-
-    Returns:
-        dict
-    """
-
-    memory = psutil.virtual_memory()
-
-    return {
-        "usage_percent": memory.percent,
-        "used_gb": round(
-            memory.used / (1024 ** 3),
-            2
-        ),
-        "total_gb": round(
-            memory.total / (1024 ** 3),
-            2
-        ),
-        "available_gb": round(
-            memory.available / (1024 ** 3),
-            2
-        )
+metrics_cache = {
+    "cpu": {"usage_percent": 0.0},
+    "ram": {
+        "usage_percent": 0.0,
+        "used_gb": 0.0,
+        "total_gb": 0.0,
+        "available_gb": 0.0
+    },
+    "speed": {
+        "download_mbps": 0.0,
+        "upload_mbps": 0.0,
+        "download_bytes": 0,
+        "upload_bytes": 0
     }
+}
+
+metrics_lock = threading.Lock()
+
+
+def monitor_metrics_worker():
+    """
+    Continuously compute heavy metrics on a background thread
+    and refresh the shared cache. The API only ever reads from
+    the cache, so requests stay fast.
+    """
+
+    global metrics_cache
+
+    while True:
+
+        try:
+
+            cpu_val = psutil.cpu_percent(interval=0.5)
+
+            memory = psutil.virtual_memory()
+
+            ram_val = {
+                "usage_percent": memory.percent,
+                "used_gb": round(
+                    memory.used / (1024 ** 3),
+                    2
+                ),
+                "total_gb": round(
+                    memory.total / (1024 ** 3),
+                    2
+                ),
+                "available_gb": round(
+                    memory.available / (1024 ** 3),
+                    2
+                )
+            }
+
+            before = psutil.net_io_counters()
+
+            time.sleep(1.0)
+
+            after = psutil.net_io_counters()
+
+            dl_b = max(
+                0,
+                after.bytes_recv - before.bytes_recv
+            )
+
+            ul_b = max(
+                0,
+                after.bytes_sent - before.bytes_sent
+            )
+
+            with metrics_lock:
+
+                metrics_cache = {
+                    "cpu": {"usage_percent": cpu_val},
+                    "ram": ram_val,
+                    "speed": {
+                        "download_mbps": round(dl_b * 8 / 1_000_000, 2),
+                        "upload_mbps": round(ul_b * 8 / 1_000_000, 2),
+                        "download_bytes": dl_b,
+                        "upload_bytes": ul_b
+                    }
+                }
+
+        except Exception as error:
+
+            print(f"[BACKGROUND METRICS ERROR] {error}")
+
+            time.sleep(2)
+
+
+threading.Thread(
+    target=monitor_metrics_worker,
+    daemon=True
+).start()
 
 
 # ============================================================
 # NETWORK INTERFACE
 # ============================================================
+
 def get_active_interface():
     """
     Get the real active network interface from network_info.py.
@@ -83,106 +137,6 @@ def get_active_interface():
             f"[ERROR] Could not get active interface: {error}"
         )
         return None
-    
-# def get_active_interface():
-#     """
-#     Find the active network interface.
-
-#     Returns:
-#         dict | None
-#     """
-
-#     stats = psutil.net_if_stats()
-#     addresses = psutil.net_if_addrs()
-
-#     for interface, info in stats.items():
-
-#         if not info.isup:
-#             continue
-
-#         if interface.lower() == "loopback":
-#             continue
-
-#         ip_address = None
-
-#         for address in addresses.get(interface, []):
-
-#             if address.family == socket.AF_INET:
-
-#                 ip_address = address.address
-
-#                 break
-
-#         if ip_address:
-
-#             return {
-#                 "interface": interface,
-#                 "ip": ip_address
-#             }
-
-#     return None
-
-
-# ============================================================
-# NETWORK SPEED
-# ============================================================
-
-def get_network_speed(interval=1):
-    """
-    Measure network download/upload speed.
-
-    Parameters:
-        interval (float):
-            Measurement duration in seconds.
-
-    Returns:
-        dict
-    """
-
-    before = psutil.net_io_counters()
-
-    time.sleep(interval)
-
-    after = psutil.net_io_counters()
-
-    download_bytes = (
-        after.bytes_recv -
-        before.bytes_recv
-    )
-
-    upload_bytes = (
-        after.bytes_sent -
-        before.bytes_sent
-    )
-
-    download_mbps = (
-        download_bytes * 8 /
-        interval /
-        1_000_000
-    )
-
-    upload_mbps = (
-        upload_bytes * 8 /
-        interval /
-        1_000_000
-    )
-
-    return {
-
-        "download_mbps": round(
-            download_mbps,
-            2
-        ),
-
-        "upload_mbps": round(
-            upload_mbps,
-            2
-        ),
-
-        "download_bytes": download_bytes,
-
-        "upload_bytes": upload_bytes
-    }
 
 
 # ============================================================
@@ -193,31 +147,28 @@ def get_monitoring_info():
     """
     Collect all laptop monitoring information.
 
+    Heavy values come from the background cache, so this call
+    never blocks on CPU sampling or speed measurement.
+
     Returns:
         dict
     """
 
     network = get_network_info()
 
-    cpu = get_cpu_usage()
-
-    ram = get_ram_usage()
-
     interface = get_active_interface()
 
-    speed = get_network_speed(
-        interval=1
-    )
+    with metrics_lock:
+
+        cached = dict(metrics_cache)
 
     return {
 
         "success": True,
 
-        "cpu": {
-            "usage_percent": cpu
-        },
+        "cpu": cached["cpu"],
 
-        "ram": ram,
+        "ram": cached["ram"],
 
         "network": {
 
@@ -242,7 +193,7 @@ def get_monitoring_info():
             )
         },
 
-        "speed": speed
+        "speed": cached["speed"]
     }
 
 
@@ -258,77 +209,15 @@ if __name__ == "__main__":
 
     try:
 
-        print("\n[1] CPU")
-
-        cpu = get_cpu_usage()
-
-        print(
-            f"CPU Usage: {cpu}%"
-        )
-
-        print("\n[2] RAM")
-
-        ram = get_ram_usage()
+        # ----------------------------------------------------
+        # Wait for the background worker to fill the cache.
+        # ----------------------------------------------------
 
         print(
-            f"Usage     : {ram['usage_percent']}%"
+            "\nWaiting for background metrics (3 seconds)..."
         )
 
-        print(
-            f"Used      : {ram['used_gb']} GB"
-        )
-
-        print(
-            f"Available : {ram['available_gb']} GB"
-        )
-
-        print(
-            f"Total     : {ram['total_gb']} GB"
-        )
-
-        print("\n[3] NETWORK INTERFACE")
-
-        interface = get_active_interface()
-
-        if interface:
-
-            print(
-                f"Interface : "
-                f"{interface['interface']}"
-            )
-
-            print(
-                f"IP        : "
-                f"{interface['ip']}"
-            )
-
-        else:
-
-            print(
-                "No active interface found."
-            )
-
-        print("\n[4] NETWORK SPEED")
-
-        print(
-            "Measuring for 1 second..."
-        )
-
-        speed = get_network_speed(
-            interval=1
-        )
-
-        print(
-            f"Download  : "
-            f"{speed['download_mbps']} Mbps"
-        )
-
-        print(
-            f"Upload    : "
-            f"{speed['upload_mbps']} Mbps"
-        )
-
-        print("\n[5] COMPLETE DATA")
+        time.sleep(3)
 
         data = get_monitoring_info()
 

@@ -11,6 +11,16 @@ const REFRESH_INTERVAL_MS = 5000;
 // HELPERS
 // ============================================================
 
+function escapeHTML(str) {
+  if (str === undefined || str === null) return "--";
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function formatBytes(bytes) {
   if (bytes === undefined || bytes === null) return "0 B";
 
@@ -169,12 +179,12 @@ async function loadDevices() {
 
       return `
         <tr>
-          <td><span class="chip ${statusClass}"><span class="chip-dot"></span>${statusLabel}</span></td>
-          <td>${device.hostname || "--"}</td>
-          <td class="mono">${device.ip || "--"}</td>
-          <td class="mono">${device.mac || "--"}</td>
-          <td>${device.device_type || "Unknown"}</td>
-          <td class="mono">${latency}</td>
+          <td><span class="chip ${statusClass}"><span class="chip-dot"></span>${escapeHTML(statusLabel)}</span></td>
+          <td>${escapeHTML(device.hostname)}</td>
+          <td class="mono">${escapeHTML(device.ip)}</td>
+          <td class="mono">${escapeHTML(device.mac)}</td>
+          <td>${escapeHTML(device.device_type)}</td>
+          <td class="mono">${escapeHTML(latency)}</td>
         </tr>
       `;
     }).join("");
@@ -203,7 +213,6 @@ async function loadMonitoring() {
     setText("ram-detail", `${ram.used_gb} / ${ram.total_gb} GB`);
 
     const speed = data.speed;
-    setText("download-value", "");
     document.getElementById("download-value").innerHTML =
       `${speed.download_mbps.toFixed(2)}<span class="metric-unit">Mbps</span>`;
     setText("download-bytes", formatBytes(speed.download_bytes));

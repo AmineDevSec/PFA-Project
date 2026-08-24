@@ -1,8 +1,11 @@
 # hotspot.py
 
-import subprocess
 import re
+import platform
 import ipaddress
+
+import psutil
+import socket
 
 from network_info import get_network_info
 
@@ -47,7 +50,24 @@ def run_command(command):
 
 def get_hotspot_ip_info():
     """
-    Get all IPv4 addresses exposed by Windows adapters.
+    Get all IPv4 addresses exposed by network adapters.
+
+    Uses psutil on Linux/macOS and ipconfig on Windows.
+
+    Returns:
+        list[dict]
+    """
+
+    if platform.system() == "Windows":
+
+        return _get_hotspot_ip_info_windows()
+
+    return _get_hotspot_ip_info_linux()
+
+
+def _get_hotspot_ip_info_windows():
+    """
+    Parse `ipconfig` output for adapter IPv4 addresses (Windows).
 
     Returns:
         list[dict]
@@ -84,13 +104,48 @@ def get_hotspot_ip_info():
     return adapters
 
 
+def _get_hotspot_ip_info_linux():
+    """
+    List adapter IPv4 addresses using psutil (Linux/macOS).
+
+    Returns:
+        list[dict]
+    """
+
+    adapters = []
+
+    try:
+
+        addresses = psutil.net_if_addrs()
+
+        for interface_name, addr_list in addresses.items():
+
+            if interface_name.lower() == "lo":
+                continue
+
+            for address in addr_list:
+
+                if address.family == socket.AF_INET:
+
+                    adapters.append({
+                        "interface": interface_name,
+                        "ip": address.address
+                    })
+
+    except Exception as error:
+
+        print(f"[ERROR] Could not list interfaces: {error}")
+
+    return adapters
+
+
 # ============================================================
 # HOTSPOT INTERFACE
 # ============================================================
 
 def get_hotspot_interface():
     """
-    Detect the Windows Mobile Hotspot adapter automatically.
+    Detect the Mobile Hotspot adapter automatically.
 
     Returns:
         dict | None
@@ -102,6 +157,32 @@ def get_hotspot_interface():
 
         name = adapter["interface"].lower()
         ip = adapter["ip"]
+
+        if platform.system() != "Windows":
+
+            # Linux hotspot adapters are commonly created by
+            # NetworkManager (default subnet 10.42.0.x) and
+            # often named after the AP connection.
+            #
+            # Additional reliable check:
+            # Windows-style hotspot range 192.168.137.x.
+
+            known_ranges = (
+                ip.startswith("10.42.0.")
+                or ip.startswith("192.168.137.")
+            )
+
+            name_match = (
+                "hotspot" in name
+                or name.startswith("ap")
+                or "-ap" in name
+                or "_ap" in name
+            )
+
+            if known_ranges or name_match:
+                return adapter
+
+            continue
 
         # Windows Mobile Hotspot commonly creates
         # an adapter called:
@@ -172,7 +253,9 @@ def is_invalid_device_ip(ip):
 
 def get_connected_devices(network=None):
     """
-    Read Windows ARP table.
+    Read the ARP table of connected devices.
+
+    Uses /proc/net/arp on Linux and `arp -a` on Windows.
 
     If a network is provided, only devices belonging to that
     network are returned.
@@ -180,6 +263,114 @@ def get_connected_devices(network=None):
     Parameters:
         network (str | None):
             Example: "192.168.137.0/24"
+
+    Returns:
+        list[dict]
+    """
+
+    if platform.system() == "Windows":
+
+        return _get_connected_devices_windows(network)
+
+    return _get_connected_devices_linux(network)
+
+
+def _filter_device_network(ip, target_network):
+    """
+    Check whether an IP belongs to the requested network.
+
+    Returns:
+        bool
+    """
+
+    if not target_network:
+        return True
+
+    try:
+
+        return ipaddress.ip_address(ip) in target_network
+
+    except ValueError:
+
+        return False
+
+
+def _get_connected_devices_linux(network=None):
+    """
+    Read the Linux ARP cache directly from /proc/net/arp.
+
+    The file has a fixed column format:
+        IP address | HW type | Flags | MAC address | Mask | Device
+
+    Returns:
+        list[dict]
+    """
+
+    devices = []
+
+    target_network = None
+
+    if network:
+
+        try:
+
+            target_network = ipaddress.ip_network(
+                network,
+                strict=False
+            )
+
+        except ValueError:
+
+            target_network = None
+
+    try:
+
+        with open("/proc/net/arp", "r") as arp_file:
+
+            next(arp_file)  # skip header
+
+            for line in arp_file:
+
+                parts = line.split()
+
+                if len(parts) >= 6:
+
+                    ip = parts[0]
+                    mac = parts[3]
+                    flags = parts[2]
+
+                    # Skip incomplete entries.
+                    if flags == "0x0" or mac == "00:00:00:00:00:00":
+                        continue
+
+                    # Ignore multicast/broadcast/etc.
+                    if is_invalid_device_ip(ip):
+                        continue
+
+                    if mac.lower() == "ff:ff:ff:ff:ff:ff":
+                        continue
+
+                    # Restrict to requested network
+                    if not _filter_device_network(ip, target_network):
+                        continue
+
+                    devices.append({
+                        "interface_ip": None,
+                        "ip": ip,
+                        "mac": mac,
+                        "type": "dynamic" if flags == "0x2" else "static"
+                    })
+
+    except Exception as error:
+
+        print(f"[ERROR] Failed to read Linux ARP cache: {error}")
+
+    return devices
+
+
+def _get_connected_devices_windows(network=None):
+    """
+    Read the Windows ARP table via `arp -a`.
 
     Returns:
         list[dict]

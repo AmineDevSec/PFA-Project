@@ -1,9 +1,13 @@
 # network_info.py
 
+import os
+import struct
 import socket
 import ipaddress
 import subprocess
 import platform
+
+import psutil
 
 
 def get_default_gateway():
@@ -33,6 +37,51 @@ def get_default_gateway():
                     if gateway:
                         return gateway
 
+            return None
+
+        else:
+
+            return _get_gateway_linux()
+
+    except Exception:
+        return None
+
+
+def _get_gateway_linux():
+    """
+    Read the default gateway from /proc/net/route (Linux).
+
+    Returns:
+        str | None: Gateway IP address.
+    """
+
+    try:
+
+        with open("/proc/net/route", "r") as route_file:
+
+            next(route_file)  # skip header
+
+            for line in route_file:
+
+                fields = line.strip().split()
+
+                if len(fields) < 3:
+                    continue
+
+                destination = fields[1]
+                gateway_hex = fields[2]
+
+                # Default route has destination 0.0.0.0
+                if destination != "00000000":
+                    continue
+
+                gateway_ip = socket.inet_ntoa(
+                    struct.pack("<L", int(gateway_hex, 16))
+                )
+
+                if gateway_ip != "0.0.0.0":
+                    return gateway_ip
+
         return None
 
     except Exception:
@@ -55,7 +104,7 @@ def get_local_ip():
         )
 
         # Does not actually send data.
-        # It allows Windows to select the active interface.
+        # It allows the OS to select the active interface.
         sock.connect(("8.8.8.8", 80))
 
         ip = sock.getsockname()[0]
@@ -70,7 +119,22 @@ def get_local_ip():
 
 
 def get_interface_name():
+    """
+    Determine the network interface name associated
+    with the active local IP.
 
+    Returns:
+        str | None
+    """
+
+    if platform.system() == "Windows":
+
+        return _get_interface_windows()
+
+    return _get_interface_psutil()
+
+
+def _get_interface_windows():
     """
     Try to determine the Windows interface name
     associated with the active local IP.
@@ -83,36 +147,106 @@ def get_interface_name():
 
     try:
 
-        if platform.system() == "Windows":
+        result = subprocess.check_output(
+            ["ipconfig"],
+            text=True,
+            encoding="utf-8",
+            errors="ignore"
+        )
 
-            result = subprocess.check_output(
-                ["ipconfig"],
-                text=True,
-                encoding="utf-8",
-                errors="ignore"
-            )
+        current_adapter = None
 
-            current_adapter = None
+        for line in result.splitlines():
 
-            for line in result.splitlines():
+            line = line.strip()
 
-                line = line.strip()
+            if line and not line.startswith(
+                ("IPv4", "Subnet", "Default")
+            ) and line.endswith(":"):
 
-                if line and not line.startswith(
-                    ("IPv4", "Subnet", "Default")
-                ) and line.endswith(":"):
+                current_adapter = line.rstrip(":")
 
-                    current_adapter = line.rstrip(":")
+            if local_ip in line:
 
-                if local_ip in line:
-
-                    return current_adapter
+                return current_adapter
 
         return None
 
     except Exception:
 
         return None
+
+
+def _get_interface_psutil():
+    """
+    Find the interface name holding the active local IP
+    using psutil (cross-platform, no shell parsing).
+
+    Returns:
+        str | None
+    """
+
+    local_ip = get_local_ip()
+
+    try:
+
+        addresses = psutil.net_if_addrs()
+
+        for interface_name, addr_list in addresses.items():
+
+            if interface_name.lower() == "lo":
+                continue
+
+            for address in addr_list:
+
+                if (
+                    address.family == socket.AF_INET
+                    and address.address == local_ip
+                ):
+
+                    return interface_name
+
+        return None
+
+    except Exception:
+
+        return None
+
+
+def get_netmask(local_ip=None):
+    """
+    Detect the netmask of the active interface via psutil.
+
+    Falls back to 255.255.255.0 when unavailable.
+
+    Returns:
+        str
+    """
+
+    try:
+
+        if not local_ip:
+            local_ip = get_local_ip()
+
+        addresses = psutil.net_if_addrs()
+
+        for _, addr_list in addresses.items():
+
+            for address in addr_list:
+
+                if (
+                    address.family == socket.AF_INET
+                    and address.address == local_ip
+                    and address.netmask
+                ):
+
+                    return address.netmask
+
+        return "255.255.255.0"
+
+    except Exception:
+
+        return "255.255.255.0"
 
 
 def get_network_info():
@@ -135,9 +269,7 @@ def get_network_info():
 
     interface = get_interface_name()
 
-    # Default fallback.
-    # We will improve subnet detection after testing this module.
-    netmask = "255.255.255.0"
+    netmask = get_netmask(local_ip)
 
     try:
 

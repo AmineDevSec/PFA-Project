@@ -1,9 +1,12 @@
 # devices.py
 
+import re
 import socket
 import subprocess
 import ipaddress
 import platform
+
+from concurrent.futures import ThreadPoolExecutor
 
 from hotspot import get_hotspot_info
 
@@ -70,11 +73,12 @@ def ping_device(ip):
         # time=XXms
         # or
         # time<1ms
-
-        import re
+        #
+        # Linux output normally contains:
+        # time=XX.X ms
 
         match = re.search(
-            r"time[=<]\s*(\d+)\s*ms",
+            r"time[=<]\s*([\d.]+)\s*ms",
             output,
             re.IGNORECASE
         )
@@ -102,26 +106,37 @@ def ping_device(ip):
 # HOSTNAME
 # ============================================================
 
-def get_hostname(ip):
+def get_hostname(ip, timeout=0.5):
     """
-    Try to resolve a device IP to a hostname.
+    Try to resolve a device IP to a hostname with a
+    bounded timeout so slow DNS lookups cannot stall
+    the request.
 
     Parameters:
         ip (str): Device IPv4 address.
+        timeout (float): Max seconds to wait.
 
     Returns:
         str | None
     """
 
+    previous_timeout = socket.getdefaulttimeout()
+
     try:
+
+        socket.setdefaulttimeout(timeout)
 
         hostname = socket.gethostbyaddr(ip)[0]
 
         return hostname
 
-    except Exception:
+    except (socket.herror, socket.gaierror, socket.timeout, OSError):
 
         return None
+
+    finally:
+
+        socket.setdefaulttimeout(previous_timeout)
 
 
 # ============================================================
@@ -184,8 +199,8 @@ def enrich_device(device):
     """
     Add hostname, latency, status and device type.
 
-    ARP discovery is considered the primary indication
-    that the device is connected.
+    The live ping result decides the ONLINE/OFFLINE status;
+    ARP presence alone is not treated as proof of activity.
 
     Parameters:
         device (dict)
@@ -204,16 +219,13 @@ def enrich_device(device):
 
     device["latency_ms"] = ping["latency_ms"]
 
-    # --------------------------------------------------------
-    # IMPORTANT
-    #
-    # If the device exists in the hotspot ARP table,
-    # consider it connected even if it doesn't answer ping.
-    # --------------------------------------------------------
+    device["online"] = ping["online"]
 
-    device["online"] = True
-
-    device["status"] = "ONLINE"
+    device["status"] = (
+        "ONLINE"
+        if ping["online"]
+        else "OFFLINE"
+    )
 
     device["ping_reachable"] = ping["online"]
 
@@ -223,40 +235,37 @@ def enrich_device(device):
 
     return device
 
-# def enrich_device(device):
-#     """
-#     Add hostname, latency, status and device type.
 
-#     Parameters:
-#         device (dict)
+# ============================================================
+# PARALLEL ENRICHMENT
+# ============================================================
 
-#     Returns:
-#         dict
-#     """
+def enrich_devices(raw_devices, max_workers=10):
+    """
+    Enrich all devices in parallel so slow DNS/ping on one
+    device cannot serialize the whole request.
 
-#     ip = device["ip"]
+    Parameters:
+        raw_devices (list[dict])
 
-#     hostname = get_hostname(ip)
+        max_workers (int)
 
-#     ping = ping_device(ip)
+    Returns:
+        list[dict]
+    """
 
-#     device["hostname"] = hostname or ip
+    if not raw_devices:
 
-#     device["online"] = ping["online"]
+        return []
 
-#     device["latency_ms"] = ping["latency_ms"]
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
 
-#     device["status"] = (
-#         "ONLINE"
-#         if ping["online"]
-#         else "OFFLINE"
-#     )
-
-#     device["device_type"] = guess_device_type(
-#         hostname
-#     )
-
-#     return device
+        return list(
+            executor.map(
+                enrich_device,
+                [device.copy() for device in raw_devices]
+            )
+        )
 
 
 # ============================================================
@@ -294,17 +303,7 @@ def get_devices():
 
     devices = hotspot["connected_devices"]
 
-    enriched_devices = []
-
-    for device in devices:
-
-        enriched = enrich_device(
-            device.copy()
-        )
-
-        enriched_devices.append(
-            enriched
-        )
+    enriched_devices = enrich_devices(devices)
 
     return {
 
